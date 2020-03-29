@@ -30,9 +30,16 @@ class CovidDataGraph:
         covid_json = self.get_covid_json_data()
         dframe = pd.DataFrame.from_dict(covid_json["data"]["rawPatientData"])
         dframe["pid"] = dframe["patientId"].apply(lambda x: "P" + str(x))
-        def to_edge(pid, links):
-            return list(itertools.chain(*[[(pid,q) for q in qs["with"]] for qs in links]))
-        dframe["edges"] = dframe.apply(lambda x: to_edge(x.pid, x.relationship), axis=1)
+        def to_edge(pid, link):
+            if link is None:
+                return []
+            if not isinstance(link, str) or not link:
+                return []
+            
+            return [(pid, link)]         
+            #return list(itertools.chain(*[[(pid,q) for q in qs["with"]] for qs in links]))
+        
+        dframe["edges"] = dframe.apply(lambda x: to_edge(x.pid, x["contractedFrom"]), axis=1)
         self.dframe = dframe
         return self.dframe   
      
@@ -61,4 +68,19 @@ class CovidDataGraph:
     
     def get_cluster_mean_degree(self):
         return np.mean([d for n, d in self.graph.degree()])
+    
+    def get_cluster_max_degree(self):
+        return np.max([d for n, d in self.graph.degree()])
 
+    def get_non_isolation_density(self):
+        l = [d for n, d in self.graph.degree()]
+        liso = [d for d in l if d!=0]
+        return len(liso)*1.0/len(l)
+    
+    def get_covid_report(self):
+        df = pd.Series()
+        df["paient_to_patient_mean_connections"] = self.get_cluster_mean_degree()
+        df["paient_to_patient_max_connection"] = self.get_cluster_max_degree()
+        df["percentage_of_non_independent_patients"] = 100.0*self.get_non_isolation_density()
+        return df
+        
